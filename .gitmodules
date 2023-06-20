@@ -1,0 +1,4 @@
+[submodule "label-studio"]
+	path = label-studio
+	url = https://github.com/heartexlabs/label-studio.git
+	branch = develop

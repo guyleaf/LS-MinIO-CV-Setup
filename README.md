@@ -2,7 +2,7 @@
 A project for processing data and building project for label studio for Computer Vision tasks.
 
 - [LS-MinIO-CV-Setup](#ls-minio-cv-setup)
-  - [Requirements](#requirements)
+  - [Test Environments](#test-environments)
   - [Data Folder Structure](#data-folder-structure)
     - [Image Classification](#image-classification)
   - [TODO](#todo)
@@ -11,8 +11,8 @@ A project for processing data and building project for label studio for Computer
     - [Export](#export)
 
 
-## Requirements
-- Label Studio
+## Test Environments
+- Label Studio: 1.8.0
 
 ## Data Folder Structure
 ### Image Classification
