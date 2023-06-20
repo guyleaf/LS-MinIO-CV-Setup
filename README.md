@@ -3,6 +3,7 @@ A project for processing data and building project for label studio for Computer
 
 - [LS-MinIO-CV-Setup](#ls-minio-cv-setup)
   - [Test Environments](#test-environments)
+  - [Commands](#commands)
   - [Data Folder Structure](#data-folder-structure)
     - [Image Classification](#image-classification)
   - [TODO](#todo)
@@ -13,6 +14,18 @@ A project for processing data and building project for label studio for Computer
 
 ## Test Environments
 - Label Studio: 1.8.0
+
+## Commands
+- setup
+  - check container env
+  - generate .env & docker-compose.*.yml
+  - ask if execute now?
+  - print command
+- upload
+  - root path
+- create
+  - project name
+  - ...
 
 ## Data Folder Structure
 ### Image Classification

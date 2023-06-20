@@ -1,0 +1,5 @@
+minio
+label-studio-sdk
+label-studio-converter
+python-dotenv
+typer

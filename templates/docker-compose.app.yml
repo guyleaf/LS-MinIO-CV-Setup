@@ -1,0 +1,29 @@
+version: "3.9"
+services:
+  app:
+    stdin_open: true
+    tty: true
+    build: ./label-studio
+    image: heartexlabs/label-studio:1.8.0
+    restart: unless-stopped
+    expose:
+      - "8000"
+    depends_on:
+      - db
+    environment:
+      - DJANGO_DB=default
+      - POSTGRE_NAME=postgres
+      - POSTGRE_USER=postgres
+      - POSTGRE_PASSWORD=
+      - POSTGRE_PORT=5432
+      - POSTGRE_HOST=db
+      - LABEL_STUDIO_HOST=${LABEL_STUDIO_HOST:-}
+      - JSON_LOG=1
+      - LABEL_STUDIO_DISABLE_SIGNUP_WITHOUT_LINK=${LABEL_STUDIO_DISABLE_SIGNUP_WITHOUT_LINK:-true}
+      - LABEL_STUDIO_USERNAME=${LABEL_STUDIO_USERNAME:-default_user@localhost}
+      - LABEL_STUDIO_PASSWORD=${LABEL_STUDIO_PASSWORD:-}
+      - LABEL_STUDIO_USER_TOKEN=${LABEL_STUDIO_USER_TOKEN}
+    #      - LOG_LEVEL=DEBUG
+    # volumes:
+      # - ./mydata:/label-studio/data:rw
+    command: label-studio-uwsgi
