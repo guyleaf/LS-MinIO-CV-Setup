@@ -16,7 +16,7 @@ services:
     #      - NGINX_SSL_CERT=/certs/cert.pem
     #      - NGINX_SSL_CERT_KEY=/certs/cert.key
     volumes:
-      - ./mydata:/label-studio/data:rw
+      # - ./mydata:/label-studio/data:rw
       - ./label-studio/deploy/nginx/certs:/certs:ro
     #   Optional: Override nginx default conf
     #      - ./label-studio/deploy/nginx/default.conf:/label-studio/deploy/nginx/default.conf
@@ -41,13 +41,13 @@ services:
       - POSTGRE_HOST=db
       - LABEL_STUDIO_HOST=${LABEL_STUDIO_HOST:-}
       - JSON_LOG=1
-      - LABEL_STUDIO_DISABLE_SIGNUP_WITHOUT_LINK=${LABEL_STUDIO_DISABLE_SIGNUP_WITHOUT_LINK:-false}
-      - LABEL_STUDIO_USERNAME=${LABEL_STUDIO_USERNAME:-}
+      - LABEL_STUDIO_DISABLE_SIGNUP_WITHOUT_LINK=${LABEL_STUDIO_DISABLE_SIGNUP_WITHOUT_LINK:-true}
+      - LABEL_STUDIO_USERNAME=${LABEL_STUDIO_USERNAME:-default_user@localhost}
       - LABEL_STUDIO_PASSWORD=${LABEL_STUDIO_PASSWORD:-}
       - LABEL_STUDIO_USER_TOKEN=${LABEL_STUDIO_USER_TOKEN}
     #      - LOG_LEVEL=DEBUG
-    volumes:
-      - ./mydata:/label-studio/data:rw
+    # volumes:
+      # - ./mydata:/label-studio/data:rw
     command: label-studio-uwsgi
 
   db:
@@ -64,6 +64,5 @@ services:
     environment:
       - POSTGRES_HOST_AUTH_METHOD=trust
     volumes:
-      - ${POSTGRES_DATA_DIR:-./postgres-data}:/var/lib/postgresql/data
+      # - ${POSTGRES_DATA_DIR:-./postgres-data}:/var/lib/postgresql/data
       - ./label-studio/deploy/pgsql/certs:/var/lib/postgresql/certs:ro
-
