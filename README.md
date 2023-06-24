@@ -17,9 +17,7 @@ A project for processing data and building project for label studio for Computer
 
 ## Commands
 - setup
-  - check container env
   - generate .env & docker-compose.*.yml
-  - ask if execute now?
   - print command
 - upload
   - root path

@@ -161,3 +161,7 @@ cython_debug/
 
 mydata/
 postgres-data/
+
+docker-compose.app.yml
+deploy/*
+!deploy/.gitkeep

@@ -1,16 +1,12 @@
 import typer
 
+import src.commands as commands
+
 app = typer.Typer()
 
 
-@app.command()
-def setup():
-    print("Hello World!")
-
-
-@app.command()
-def upload():
-    print("Hello World!")
+app.command(help="Generate config files from templates.")(commands.setup)
+app.command()(commands.upload)
 
 
 @app.command()
