@@ -1,7 +1,10 @@
 import os
+from io import StringIO
 from typing import Annotated
+from urllib.parse import urlparse
 
 import typer
+from dotenv import load_dotenv
 from jinja2 import Environment, FileSystemLoader
 
 from ..utils import console, generate_token
@@ -11,7 +14,9 @@ _ENV_TEMPLATE = f".env{_TEMPLATE_SUFFIX}"
 _APP_COMPOSE_TEMPLATE = f"docker-compose.app.yml{_TEMPLATE_SUFFIX}"
 
 # deploy
-_INIT_DB_TEMPLATE = f"deploy/init-apps-db.sql{_TEMPLATE_SUFFIX}"
+_DEPLOY_DIR = "deploy"
+_INIT_DB_TEMPLATE = f"{_DEPLOY_DIR}/init-apps-db.sql{_TEMPLATE_SUFFIX}"
+_NGINX_TEMPLATE = f"{_DEPLOY_DIR}/nginx.conf{_TEMPLATE_SUFFIX}"
 
 _LS_TOKEN_LENGTH = 20
 _LS_PASSWORD_LENGTH = 16
@@ -54,6 +59,10 @@ def save_template(path: str, content: str):
         f.write(content)
 
 
+def is_host_valid(host: str) -> bool:
+    return host.startswith("http://") or host.startswith("https://")
+
+
 def render_env_template(num_annotators: int, env: Environment) -> str:
     template = env.get_template(_ENV_TEMPLATE)
 
@@ -77,6 +86,19 @@ def render_app_compose_template(num_annotators: int, env: Environment) -> str:
 def render_init_db_template(num_annotators: int, env: Environment) -> str:
     template = env.get_template(_INIT_DB_TEMPLATE)
     result = template.render(num_apps=num_annotators)
+    return result
+
+
+def render_nginx_template(host: str, env: Environment) -> str:
+    prefix_path = ""
+    if is_host_valid(host):
+        parsed_host = urlparse(host)
+        prefix_path = parsed_host.path.removesuffix("/")
+
+    console.log("Use prefix host path:", prefix_path)
+
+    template = env.get_template(_NGINX_TEMPLATE)
+    result = template.render(prefix_path=prefix_path)
     return result
 
 
@@ -119,6 +141,17 @@ def setup(
         env_path = os.path.join(out_dir, _ENV_TEMPLATE.removesuffix(_TEMPLATE_SUFFIX))
         console.log("Rendered env template [green]successfully[/].")
 
+        if not load_dotenv(stream=StringIO(env_content)):
+            raise RuntimeError("Error: invalid env file.")
+
+        nginx_content = render_nginx_template(
+            os.environ.get("LABEL_STUDIO_HOST", ""), env
+        )
+        nginx_path = os.path.join(
+            out_dir, _NGINX_TEMPLATE.removesuffix(_TEMPLATE_SUFFIX)
+        )
+        console.log("Rendered nginx template [green]successfully[/].")
+
         app_compose_content = render_app_compose_template(num_annotators, env)
         app_compose_path = os.path.join(
             out_dir, _APP_COMPOSE_TEMPLATE.removesuffix(_TEMPLATE_SUFFIX)
@@ -132,6 +165,7 @@ def setup(
         console.log("Rendered init db template [green]successfully[/].")
 
     save_template(env_path, env_content)
+    save_template(nginx_path, nginx_content)
     save_template(app_compose_path, app_compose_content)
     save_template(init_db_path, init_db_content)
     print_start_hints(out_dir)

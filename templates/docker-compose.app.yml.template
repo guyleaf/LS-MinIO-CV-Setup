@@ -23,13 +23,14 @@ services:
       - POSTGRE_PASSWORD=
       - POSTGRE_PORT=5432
       - POSTGRE_HOST=db
-      - LABEL_STUDIO_HOST=${LABEL_STUDIO_HOST:-}
+      # the prefix index must be included, or it will not work.
+      - LABEL_STUDIO_HOST=${LABEL_STUDIO_HOST}/{{index}}
       - JSON_LOG=1
       - LABEL_STUDIO_DISABLE_SIGNUP_WITHOUT_LINK=${LABEL_STUDIO_DISABLE_SIGNUP_WITHOUT_LINK:-true}
       - LABEL_STUDIO_USERNAME=${LABEL_STUDIO_USERNAME_{{index}}}
       - LABEL_STUDIO_PASSWORD=${LABEL_STUDIO_PASSWORD_{{index}}}
       - LABEL_STUDIO_USER_TOKEN=${LABEL_STUDIO_USER_TOKEN}
-      - LOG_LEVEL=ERROR
+      - LOG_LEVEL=WARNING
     volumes:
       - app-{{index}}-data:/label-studio/data:rw
     command: label-studio-uwsgi

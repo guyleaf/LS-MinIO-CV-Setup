@@ -3,6 +3,5 @@ label-studio-sdk
 label-studio-converter
 python-dotenv
 typer[all]
-python-nginx
 Jinja2
 pyyaml

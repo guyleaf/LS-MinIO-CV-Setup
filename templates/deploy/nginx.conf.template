@@ -89,6 +89,11 @@ http {
 
   include resolv.conf;
 
+  map $uri $app_id {
+    default 'NOT_FOUND';
+    "~^{{prefix_path}}/(\d+)" $1;
+  }
+
   server {
     listen      8085;
     add_header X-Request-ID $request_id; # Return to client
@@ -116,29 +121,30 @@ http {
         return 204;
     }
 
-    location /static/ {
-        alias /label-studio/label_studio/core/static_build/;
+    # FIXME: wait to fix incorrect static file redirection in docs/api path
+    location ~ ^({{prefix_path}}/(\d+))?/static/(.*) {
+        alias /label-studio/label_studio/core/static_build/$3;
     }
 
     # Frontend react
     # Source: https://github.com/heartexlabs/label-studio-frontend
-    location /label-studio-frontend/ {
-        alias /label-studio/label_studio/frontend/dist/lsf/;
+    location ~ ^{{prefix_path}}/(\d+)/label-studio-frontend/(.*) {
+        alias /label-studio/label_studio/frontend/dist/lsf/$2;
     }
 
     # Data Manager
     # Source: https://github.com/heartexlabs/dm2
-    location /dm/ {
-        alias /label-studio/label_studio/frontend/dist/dm/;
+    location ~ ^{{prefix_path}}/(\d+)/dm/(.*) {
+        alias /label-studio/label_studio/frontend/dist/dm/$2;
     }
 
     # LabelStudio frontend
     # Source: https://github.com/heartexlabs/label-studio/blob/HEAD/label_studio/frontend/src
-    location /react-app/ {
-        alias /label-studio/label_studio/frontend/dist/react-app/;
+    location ~ ^{{prefix_path}}/(\d+)/react-app/(.*) {
+        alias /label-studio/label_studio/frontend/dist/react-app/$2;
     }
 
-    location /nginx_health {
+    location {{prefix_path}}/nginx_health {
         return 200;
     }
 
@@ -188,13 +194,14 @@ http {
         proxy_pass $saved_redirect_location;
     }
 
-    location ~ ^/(?<app_id>\d+) {
-        rewrite_log on;
+    location {{prefix_path}}/ {
+        error_page 404 /404.html;
+        # rewrite_log on;
 
-        # add a trailing slash if not exist
-        rewrite ^(.*[^/])$ $1/;
-        # rewrite as app path
-        rewrite ^(.*)/(\d+)/(.*)$ /$3;
+        if ($app_id = "NOT_FOUND") {
+            return 404;
+        }
+        rewrite ^{{prefix_path}}/(\d+)[/]?(.*) /$2 break;
 
         absolute_redirect off;
         proxy_connect_timeout 90;
@@ -212,6 +219,9 @@ http {
 
     error_page   500 502 503 504  /50x.html;
 
+    location = /404.html {
+        root   /usr/share/nginx/html;
+    }
     location = /50x.html {
         root   /usr/share/nginx/html;
     }
