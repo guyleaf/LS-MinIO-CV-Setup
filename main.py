@@ -6,7 +6,9 @@ app = typer.Typer()
 
 
 app.command(help="Generate config files from templates.")(commands.setup)
-app.command()(commands.upload)
+app.command(
+    help="Upload data to MinIO and generate json files for label studio tasks."
+)(commands.upload)
 
 
 @app.command()

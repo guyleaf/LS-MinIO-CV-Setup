@@ -17,11 +17,12 @@ services:
     restart: unless-stopped
     logging: *default-logging
     ports:
-      - "9000:9000"
-      - "9009:9009"
+      # Recommend: bind localhost only (security)
+      # you can use port forwarding via SSH/others if you'd like to access it from browser
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9009:9009"
     volumes:
       - minio-data:/data
-    # configure env vars in .env file or your systems environment
     environment:
       - MINIO_ROOT_USER=${MINIO_ROOT_USER:-minio_admin_do_not_use_in_production}
       - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:-minio_admin_do_not_use_in_production}
@@ -32,8 +33,10 @@ services:
     image: quay.io/prometheus/prometheus:v2.37.1
     restart: unless-stopped
     logging: *default-logging
-    #    ports:
-    #      - "9090:9090"
+    ports:
+      # Recommend: bind localhost only (security)
+      # you can use port forwarding via SSH/others if you'd like to access it from browser
+      - "127.0.0.1:9090:9090"
     volumes:
       - "./label-studio/prometheus/minio/prometheus.yml:/etc/prometheus/prometheus.yml"
       - "prometheus-data:/prometheus"

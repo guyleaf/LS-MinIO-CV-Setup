@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 from jinja2 import Environment, FileSystemLoader
 
 from ..utils import console, generate_token
+from .utils import validate_path
 
 _TEMPLATE_SUFFIX = ".template"
 _ENV_TEMPLATE = f".env{_TEMPLATE_SUFFIX}"
@@ -32,12 +33,6 @@ def validate_num_annotators(value: int):
     return value
 
 
-def validate_templates_dir(value: str):
-    if not os.path.exists(value):
-        raise typer.BadParameter("templates_dir is not found.")
-    return value
-
-
 # Argument type hints
 _NUM_ANNOTATORS_ARGUMENT = Annotated[
     int,
@@ -47,7 +42,7 @@ _NUM_ANNOTATORS_ARGUMENT = Annotated[
 ]
 _TEMPLATES_DIR_ARGUMENT = Annotated[
     str,
-    typer.Option(help="The path of templates folder", callback=validate_templates_dir),
+    typer.Option(help="The path of templates folder", callback=validate_path),
 ]
 
 
@@ -121,6 +116,7 @@ def print_start_hints(out_dir: str):
 
 
 def print_ls_url():
+    # TODO: Print ls url
     pass
 
 
