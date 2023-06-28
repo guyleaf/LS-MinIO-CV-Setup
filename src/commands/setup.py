@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 from jinja2 import Environment, FileSystemLoader
 
 from ..utils import console, generate_token
-from .utils import validate_path
+from .utils import validate_path, validate_url
 
 _TEMPLATE_SUFFIX = ".template"
 _ENV_TEMPLATE = f".env{_TEMPLATE_SUFFIX}"
@@ -40,9 +40,20 @@ _NUM_ANNOTATORS_ARGUMENT = Annotated[
         help="How many annotators do you need?", callback=validate_num_annotators
     ),
 ]
+
 _TEMPLATES_DIR_ARGUMENT = Annotated[
     str,
     typer.Option(help="The path of templates folder", callback=validate_path),
+]
+
+_LS_HOST_ARGUMENT = Annotated[
+    str,
+    typer.Option(help="The url of label studio host", callback=validate_url),
+]
+
+_MINIO_HOST_ARGUMENT = Annotated[
+    str,
+    typer.Option(help="The url of minio host", callback=validate_url),
 ]
 
 
@@ -54,20 +65,29 @@ def save_template(path: str, content: str):
         f.write(content)
 
 
-def is_host_valid(host: str) -> bool:
-    return host.startswith("http://") or host.startswith("https://")
-
-
-def render_env_template(num_annotators: int, env: Environment) -> str:
+def render_env_template(
+    num_annotators: int,
+    ls_host: str,
+    minio_host: str,
+    env: Environment,
+) -> str:
     template = env.get_template(_ENV_TEMPLATE)
 
     # generate tokens
     ls_token = generate_token(_LS_TOKEN_LENGTH)
-    ls_passwords = [generate_token(_LS_PASSWORD_LENGTH) for _ in range(num_annotators)]
+    ls_password = generate_token(_LS_PASSWORD_LENGTH)
+    ls_app_passwords = [
+        generate_token(_LS_PASSWORD_LENGTH) for _ in range(num_annotators)
+    ]
     minio_password = generate_token(_MINIO_PASSWORD_LENGTH)
 
     result = template.render(
-        ls_token=ls_token, ls_passwords=ls_passwords, minio_password=minio_password
+        ls_token=ls_token,
+        ls_password=ls_password,
+        ls_app_passwords=ls_app_passwords,
+        minio_password=minio_password,
+        ls_host=ls_host,
+        minio_host=minio_host,
     )
     return result
 
@@ -85,10 +105,8 @@ def render_init_db_template(num_annotators: int, env: Environment) -> str:
 
 
 def render_nginx_template(host: str, env: Environment) -> str:
-    prefix_path = ""
-    if is_host_valid(host):
-        parsed_host = urlparse(host)
-        prefix_path = parsed_host.path.removesuffix("/")
+    parsed_host = urlparse(host)
+    prefix_path = parsed_host.path.removesuffix("/")
 
     console.log("Use prefix host path:", prefix_path)
 
@@ -122,6 +140,8 @@ def print_ls_url():
 
 def setup(
     num_annotators: _NUM_ANNOTATORS_ARGUMENT,
+    ls_host: _LS_HOST_ARGUMENT = "http://localhost:8085/app",
+    minio_host: _MINIO_HOST_ARGUMENT = "http://localhost:9000",
     templates_dir: _TEMPLATES_DIR_ARGUMENT = "templates",
     out_dir: str = ".",
 ):
@@ -133,7 +153,7 @@ def setup(
     # render templates
     env = Environment(loader=FileSystemLoader(templates_dir))
     with console.status("[bold green]Rendering templates..."):
-        env_content = render_env_template(num_annotators, env)
+        env_content = render_env_template(num_annotators, ls_host, minio_host, env)
         env_path = os.path.join(out_dir, _ENV_TEMPLATE.removesuffix(_TEMPLATE_SUFFIX))
         console.log("Rendered env template [green]successfully[/].")
 

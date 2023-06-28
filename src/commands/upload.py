@@ -2,7 +2,6 @@ import json
 import os
 from io import BytesIO
 from typing import Annotated
-from urllib.parse import urlparse
 
 import minio
 import typer
@@ -12,7 +11,7 @@ from rich.progress import track
 
 from .. import settings
 from ..datasets import ImageDataset
-from ..utils import console, err_console, generate_token
+from ..utils import connect_minio, console, err_console, generate_token
 from .utils import validate_path
 
 #################################################################################
@@ -24,7 +23,6 @@ _DATA_DIR_ARGUMENT = Annotated[
     typer.Argument(help="The path of data folder", callback=validate_path),
 ]
 
-# Argument type hints
 _BUCKET_NAME_ARGUMENT = Annotated[
     str,
     typer.Option(help="The name of the bucket"),
@@ -34,11 +32,11 @@ _BUCKET_NAME_ARGUMENT = Annotated[
 #################################################################################
 
 
-def clear_bucket(bucket_name: str, blob_client: minio.Minio):
+def clear_bucket(bucket_name: str, minio_client: minio.Minio):
     console.log("Clearing bucket...")
-    objects = blob_client.list_objects(bucket_name, recursive=True)
+    objects = minio_client.list_objects(bucket_name, recursive=True)
     objects = [DeleteObject(obj.object_name) for obj in objects]
-    errors: list[DeleteError] = list(blob_client.remove_objects(bucket_name, objects))
+    errors: list[DeleteError] = list(minio_client.remove_objects(bucket_name, objects))
     if len(errors) != 0:
         for error in errors:
             err_console.log("[red]Error code:", error.code)
@@ -48,21 +46,25 @@ def clear_bucket(bucket_name: str, blob_client: minio.Minio):
         raise RuntimeError(f"Found {len(errors)} errors.")
 
 
-def create_bucket(bucket_name: str, blob_client: minio.Minio):
-    if blob_client.bucket_exists(bucket_name):
+def create_bucket(bucket_name: str, minio_client: minio.Minio):
+    if minio_client.bucket_exists(bucket_name):
         console.log(f"The bucket {bucket_name} already exists.")
         typer.confirm("Do you want to continue(clear) ?", abort=True)
-        clear_bucket(bucket_name, blob_client)
+        clear_bucket(bucket_name, minio_client)
     else:
         console.log("Creating bucket...")
-        blob_client.make_bucket(bucket_name)
+        minio_client.make_bucket(bucket_name)
 
 
-def create_task_format(image_uri: str):
-    return dict(image=image_uri)
+def create_task_format(id: int, bucket_name: str, object_name: str, image_path: str):
+    return dict(
+        data=dict(
+            id=id, image=f"s3://{bucket_name}/{object_name}", image_path=image_path
+        )
+    )
 
 
-def upload_data(data_dir: str, bucket_name: str, blob_client: minio.Minio):
+def upload_data(data_dir: str, bucket_name: str, minio_client: minio.Minio):
     dataset = ImageDataset(data_dir, load_image=False)
     total = len(dataset)
 
@@ -73,16 +75,17 @@ def upload_data(data_dir: str, bucket_name: str, blob_client: minio.Minio):
     ):
         # upload data
         relative_image_path = os.path.relpath(image_path, start=data_dir)
-        result: ObjectWriteResult = blob_client.fput_object(
+        result: ObjectWriteResult = minio_client.fput_object(
             bucket_name, relative_image_path, image_path, content_type=content_type
         )
 
         # upload a task for data
-        image_uri = f"s3://{result.bucket_name}/{result.object_name}"
-        task = create_task_format(image_uri)
+        task = create_task_format(
+            id - 1, result.bucket_name, result.object_name, relative_image_path
+        )
         f = BytesIO(json.dumps(task).encode("utf-8"))
 
-        blob_client.put_object(
+        minio_client.put_object(
             bucket_name,
             "tasks/task_" + str(id).zfill(8) + ".json",
             f,
@@ -96,16 +99,12 @@ def upload(
 ):
     data_dir = os.path.expanduser(data_dir)
 
-    parsed_minio_host = urlparse(settings.MINIO_HOST)
-    blob_client = minio.Minio(
-        parsed_minio_host.netloc,
-        access_key=settings.MINIO_ROOT_USER,
-        secret_key=settings.MINIO_ROOT_PASSWORD,
-        secure=False,
+    minio_client = connect_minio(
+        settings.MINIO_HOST, settings.MINIO_ROOT_USER, settings.MINIO_ROOT_PASSWORD
     )
 
-    create_bucket(bucket_name, blob_client)
+    create_bucket(bucket_name, minio_client)
 
-    upload_data(data_dir, bucket_name, blob_client)
+    upload_data(data_dir, bucket_name, minio_client)
 
     console.log(f"[bold green]Uploaded data to the bucket {bucket_name} successfully.")

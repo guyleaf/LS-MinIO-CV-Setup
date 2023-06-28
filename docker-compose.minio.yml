@@ -17,9 +17,9 @@ services:
     restart: unless-stopped
     logging: *default-logging
     ports:
+      - "9000:9000"
       # Recommend: bind localhost only (security)
       # you can use port forwarding via SSH/others if you'd like to access it from browser
-      - "127.0.0.1:9000:9000"
       - "127.0.0.1:9009:9009"
     volumes:
       - minio-data:/data

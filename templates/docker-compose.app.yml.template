@@ -31,8 +31,15 @@ services:
       - LABEL_STUDIO_PASSWORD=${LABEL_STUDIO_PASSWORD_{{index}}}
       - LABEL_STUDIO_USER_TOKEN=${LABEL_STUDIO_USER_TOKEN}
       - LOG_LEVEL=WARNING
+      # disable label-studio bug tracker
+      # reference: https://github.com/heartexlabs/label-studio/issues/1455
+      - SENTRY_DSN=
+      - FRONTEND_SENTRY_DSN=
+      - SENTRY_RATE=0
+      - FRONTEND_SENTRY_RATE=0
     volumes:
       - app-{{index}}-data:/label-studio/data:rw
+      - ./deploy/uwsgi.ini:/label-studio/deploy/uwsgi.ini
     command: label-studio-uwsgi
   {% endfor %}
 volumes:

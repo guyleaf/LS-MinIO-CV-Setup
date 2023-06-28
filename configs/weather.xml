@@ -1,0 +1,54 @@
+<View style="display: flex;">
+    <View style="flex: 2">
+        <Image name="image" value="$image" zoom="true" zoomControl="true" />
+    </View>
+    <View
+        style="flex: 1 0; margin-left: 25px; display: flex; flex-direction: column; justify-content: space-around;">
+        <View style="margin-bottom: 20px;">
+            <Header size="4" value="照片裡的天氣如何? How's the weather in this photo?" />
+            <Choices name="weather" toName="image" required="true" showInline="true"
+                choice="single-radio">
+                <Choice alias="clear" value="Clear" />
+                <Choice alias="cloudy" value="Cloudy" />
+                <Choice alias="rainy" value="Rainy" />
+                <Choice alias="foggy" value="Foggy" />
+                <Choice alias="snowy" value="Snowy" />
+            </Choices>
+        </View>
+
+        <View>
+            <Header size="4"
+                value="照片裡的整體亮度大約是多少? What's the overall brightness level in this photo?" />
+            <Header size="5" value="(Please select in confidence order, 1 is the most confident)" />
+            <View style="display: flex; align-items: baseline;">
+                <View style="margin-right: 5px;">
+                    <HyperText name="text_1" value="" inline="true" selectionEnabled="false"
+                        saveTextResult="no" granularity="word">
+                        <span>1.</span>
+                    </HyperText>
+                </View>
+                <Choices name="intensity_1" toName="image" required="true" showInline="true"
+                    choice="single-radio">
+                    <Choice alias="bright" value="Bright" />
+                    <Choice alias="medium" value="Medium" />
+                    <Choice alias="dark" value="Dark" />
+                </Choices>
+            </View>
+
+            <View style="display: flex; align-items: baseline;">
+                <View style="margin-right: 5px;">
+                    <HyperText name="text_2" value="" inline="true" selectionEnabled="false"
+                        saveTextResult="no" granularity="word">
+                        <span>2.</span>
+                    </HyperText>
+                </View>
+                <Choices name="intensity_2" toName="image" required="true" showInline="true"
+                    choice="single-radio">
+                    <Choice alias="bright" value="Bright" />
+                    <Choice alias="medium" value="Medium" />
+                    <Choice alias="dark" value="Dark" />
+                </Choices>
+            </View>
+        </View>
+    </View>
+</View>

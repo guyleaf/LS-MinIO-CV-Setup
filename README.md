@@ -30,9 +30,9 @@ A project for processing data and building project for label studio for Computer
 
 ## TODO
 ### Setups
-- [ ] Upload data to MinIO
-- [ ] Create json files for data
-- [ ] Create Project via Python SDK
+- [x] Upload data to MinIO
+- [x] Create json files for data
+- [x] Create Project via Python SDK
 
 ### Evaluation
 - [ ] Evaluate annotator performance
