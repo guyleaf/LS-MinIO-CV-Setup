@@ -7,22 +7,9 @@ import typer
 from dotenv import load_dotenv
 from jinja2 import Environment, FileSystemLoader
 
+from .. import settings
 from ..utils import console, generate_token
 from .utils import validate_path, validate_url
-
-_TEMPLATE_SUFFIX = ".template"
-_ENV_TEMPLATE = f".env{_TEMPLATE_SUFFIX}"
-_APP_COMPOSE_TEMPLATE = f"docker-compose.app.yml{_TEMPLATE_SUFFIX}"
-
-# deploy
-_DEPLOY_DIR = "deploy"
-_INIT_DB_TEMPLATE = f"{_DEPLOY_DIR}/init-apps-db.sql{_TEMPLATE_SUFFIX}"
-_NGINX_TEMPLATE = f"{_DEPLOY_DIR}/nginx.conf{_TEMPLATE_SUFFIX}"
-
-_LS_TOKEN_LENGTH = 20
-_LS_PASSWORD_LENGTH = 16
-_MINIO_PASSWORD_LENGTH = 16
-
 
 #################################################################################
 
@@ -71,20 +58,18 @@ def render_env_template(
     minio_host: str,
     env: Environment,
 ) -> str:
-    template = env.get_template(_ENV_TEMPLATE)
+    template = env.get_template(settings.ENV_TEMPLATE)
 
     # generate tokens
-    ls_token = generate_token(_LS_TOKEN_LENGTH)
-    ls_password = generate_token(_LS_PASSWORD_LENGTH)
-    ls_app_passwords = [
-        generate_token(_LS_PASSWORD_LENGTH) for _ in range(num_annotators)
+    ls_token = generate_token(settings.LS_TOKEN_LENGTH)
+    ls_passwords = [
+        generate_token(settings.LS_PASSWORD_LENGTH) for _ in range(num_annotators)
     ]
-    minio_password = generate_token(_MINIO_PASSWORD_LENGTH)
+    minio_password = generate_token(settings.MINIO_PASSWORD_LENGTH)
 
     result = template.render(
         ls_token=ls_token,
-        ls_password=ls_password,
-        ls_app_passwords=ls_app_passwords,
+        ls_passwords=ls_passwords,
         minio_password=minio_password,
         ls_host=ls_host,
         minio_host=minio_host,
@@ -93,13 +78,13 @@ def render_env_template(
 
 
 def render_app_compose_template(num_annotators: int, env: Environment) -> str:
-    template = env.get_template(_APP_COMPOSE_TEMPLATE)
+    template = env.get_template(settings.APP_COMPOSE_TEMPLATE)
     result = template.render(num_apps=num_annotators)
     return result
 
 
 def render_init_db_template(num_annotators: int, env: Environment) -> str:
-    template = env.get_template(_INIT_DB_TEMPLATE)
+    template = env.get_template(settings.INIT_DB_TEMPLATE)
     result = template.render(num_apps=num_annotators)
     return result
 
@@ -110,7 +95,7 @@ def render_nginx_template(host: str, env: Environment) -> str:
 
     console.log("Use prefix host path:", prefix_path)
 
-    template = env.get_template(_NGINX_TEMPLATE)
+    template = env.get_template(settings.NGINX_TEMPLATE)
     result = template.render(prefix_path=prefix_path)
     return result
 
@@ -120,7 +105,7 @@ def print_start_hints(out_dir: str):
 
     compose_path = os.path.join(out_dir, "docker-compose.yml")
     app_compose_path = os.path.join(
-        out_dir, _APP_COMPOSE_TEMPLATE.removesuffix(_TEMPLATE_SUFFIX)
+        out_dir, settings.APP_COMPOSE_TEMPLATE.removesuffix(settings.TEMPLATE_SUFFIX)
     )
     minio_compose_path = os.path.join(out_dir, "docker-compose.minio.yml")
 
@@ -128,9 +113,11 @@ def print_start_hints(out_dir: str):
     console.log(f"[blue]docker compose -f {compose_path} -f {app_compose_path} up -d")
 
     console.log(
-        "\n[yellow]Note: if you'd like to use MinIO container, append this file"
+        "\n[yellow]Note: if you'd like to use MinIO container, run this command"
     )
-    console.log(f"[blue]-f {minio_compose_path}")
+    console.log(
+        f"[blue]docker compose -f {compose_path} -f {app_compose_path} -f {minio_compose_path} up -d"
+    )
 
 
 def print_ls_url():
@@ -154,7 +141,9 @@ def setup(
     env = Environment(loader=FileSystemLoader(templates_dir))
     with console.status("[bold green]Rendering templates..."):
         env_content = render_env_template(num_annotators, ls_host, minio_host, env)
-        env_path = os.path.join(out_dir, _ENV_TEMPLATE.removesuffix(_TEMPLATE_SUFFIX))
+        env_path = os.path.join(
+            out_dir, settings.ENV_TEMPLATE.removesuffix(settings.TEMPLATE_SUFFIX)
+        )
         console.log("Rendered env template [green]successfully[/].")
 
         if not load_dotenv(stream=StringIO(env_content)):
@@ -164,19 +153,20 @@ def setup(
             os.environ.get("LABEL_STUDIO_HOST", ""), env
         )
         nginx_path = os.path.join(
-            out_dir, _NGINX_TEMPLATE.removesuffix(_TEMPLATE_SUFFIX)
+            out_dir, settings.NGINX_TEMPLATE.removesuffix(settings.TEMPLATE_SUFFIX)
         )
         console.log("Rendered nginx template [green]successfully[/].")
 
         app_compose_content = render_app_compose_template(num_annotators, env)
         app_compose_path = os.path.join(
-            out_dir, _APP_COMPOSE_TEMPLATE.removesuffix(_TEMPLATE_SUFFIX)
+            out_dir,
+            settings.APP_COMPOSE_TEMPLATE.removesuffix(settings.TEMPLATE_SUFFIX),
         )
         console.log("Rendered app compose template [green]successfully[/].")
 
         init_db_content = render_init_db_template(num_annotators, env)
         init_db_path = os.path.join(
-            out_dir, _INIT_DB_TEMPLATE.removesuffix(_TEMPLATE_SUFFIX)
+            out_dir, settings.INIT_DB_TEMPLATE.removesuffix(settings.TEMPLATE_SUFFIX)
         )
         console.log("Rendered init db template [green]successfully[/].")
 

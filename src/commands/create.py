@@ -1,50 +1,25 @@
+import json
+import os
 import timeit
-from typing import Annotated, Union
+from typing import Annotated
 
 import minio
 import typer
 from label_studio_sdk import Client, Project
-from label_studio_sdk.client import TIMEOUT
-from label_studio_sdk.data_manager import Column, Filters, Operator, Type
 from label_studio_sdk.project import ProjectSampling
 from requests import HTTPError
 
 from .. import settings
-from ..utils import connect_minio, console
+from ..utils import (
+    check_buckets_exists,
+    check_ls_connection,
+    connect_minio,
+    console,
+    count_tasks_in_bucket,
+    create_view,
+    sync_storage,
+)
 from .utils import validate_path
-
-LS_VIEWS = [
-    {
-        "filters": Filters.create(
-            Filters.AND,
-            [
-                Filters.item(
-                    Column.completed_at,
-                    Operator.EMPTY,
-                    Type.Datetime,
-                    Filters.value(True),
-                ),
-            ],
-        ),
-        "ordering": [f"-{Column.created_at}"],
-        "title": "Unlabeled",
-    },
-    {
-        "filters": Filters.create(
-            Filters.AND,
-            [
-                Filters.item(
-                    Column.completed_at,
-                    Operator.EMPTY,
-                    Type.Datetime,
-                    Filters.value(False),
-                ),
-            ],
-        ),
-        "ordering": [Column.completed_at],
-        "title": "Annotated",
-    },
-]
 
 #################################################################################
 
@@ -71,40 +46,6 @@ _BUCKETS_ARGUMENT = Annotated[
 #################################################################################
 
 
-def check_buckets_exists(buckets: list[str], minio_client: minio.Minio) -> None:
-    for bucket in buckets:
-        if not minio_client.bucket_exists(bucket):
-            raise RuntimeError(f"The bucket {bucket} does not exist.")
-
-
-def check_ls_connection(ls_client: Union[Client, Project]) -> None:
-    with console.status("[yellow]Waiting LS up..."):
-        try:
-            ls_client.check_connection()
-        except Exception:
-            pass
-
-
-def count_tasks_in_storage(minio_client: minio.Minio, bucket_name: str) -> int:
-    count = 0
-    for _ in minio_client.list_objects(bucket_name, prefix="tasks/", recursive=True):
-        count += 1
-    return count
-
-
-def sync_storage(
-    project: Project, storage_type: str, storage_id: int, timeout: int = TIMEOUT
-) -> dict:
-    response = project.make_request(
-        "POST", f"/api/storages/{storage_type}/{str(storage_id)}/sync", timeout=timeout
-    )
-    return response.json()
-
-
-def delete_view(project: Project, id: int) -> None:
-    project.make_request("DELETE", f"/api/dm/views/{id}")
-
-
 def create_project(project_name: str, label_config: str, ls_client: Client) -> Project:
     with open(label_config, "r") as f:
         label_config = f.read()
@@ -120,11 +61,9 @@ def create_project(project_name: str, label_config: str, ls_client: Client) -> P
     )
 
     # add predefined views
-    for view in LS_VIEWS:
-        project.create_view(**view)
+    for view in settings.LS_VIEWS:
+        create_view(project, view)
 
-    # delete default view
-    delete_view(project, 0)
     return project
 
 
@@ -138,7 +77,7 @@ def import_data(project: Project, buckets: list[str], minio_client: minio.Minio)
     status = console.status("[yellow]Importing data...")
     status.start()
     for bucket in buckets:
-        total_tasks = count_tasks_in_storage(minio_client, bucket)
+        total_tasks = count_tasks_in_bucket(minio_client, bucket)
         storage: dict = project.connect_s3_import_storage(
             bucket,
             prefix="tasks/",
@@ -182,6 +121,8 @@ def create(
     minio_client = connect_minio(
         settings.MINIO_HOST, settings.MINIO_ROOT_USER, settings.MINIO_ROOT_PASSWORD
     )
+
+    # check & select bucket
     if len(buckets) != 0:
         check_buckets_exists(buckets, minio_client)
     else:
@@ -189,9 +130,25 @@ def create(
         if len(buckets) == 0:
             raise RuntimeError("No buckets in the storage.")
 
+    # create project & import data
+    project_ids = []
     for app_id in range(1, settings.NUM_LABEL_STUDIO_APPS + 1):
         ls_host = f"{settings.LABEL_STUDIO_HOST}/{app_id}"
         ls_client = Client(ls_host, settings.LABEL_STUDIO_USER_TOKEN)
         project = create_project(project_name, label_config, ls_client)
         import_data(project, buckets, minio_client)
-        console.log(f"[app-{app_id}] Imported data [green]successfully[/].")
+        console.log(f"\[app-{app_id}] Imported data [green]successfully[/].")
+
+        project_ids.append(project.params["id"])
+
+    # store project infos for evaluating and exporting
+    if os.path.exists(settings.PROJECTS_MAP):
+        with open(settings.PROJECTS_MAP, "r") as f:
+            projects_map = json.load(f)
+    else:
+        projects_map = []
+
+    projects_map.append(dict(name=project_name, ids=project_ids))
+
+    with open(settings.PROJECTS_MAP, "w") as f:
+        json.dump(projects_map, f)

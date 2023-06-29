@@ -59,7 +59,13 @@ def create_bucket(bucket_name: str, minio_client: minio.Minio):
 def create_task_format(id: int, bucket_name: str, object_name: str, image_path: str):
     return dict(
         data=dict(
-            id=id, image=f"s3://{bucket_name}/{object_name}", image_path=image_path
+            image=f"s3://{bucket_name}/{object_name}",
+            metadata=dict(
+                id=id,
+                path=image_path,
+                bucket_name=bucket_name,
+                object_name=object_name,
+            ),
         )
     )
 
@@ -81,7 +87,7 @@ def upload_data(data_dir: str, bucket_name: str, minio_client: minio.Minio):
 
         # upload a task for data
         task = create_task_format(
-            id - 1, result.bucket_name, result.object_name, relative_image_path
+            id, result.bucket_name, result.object_name, relative_image_path
         )
         f = BytesIO(json.dumps(task).encode("utf-8"))
 

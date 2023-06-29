@@ -33,8 +33,11 @@ A project for processing data and building project for label studio for Computer
 - [x] Upload data to MinIO
 - [x] Create json files for data
 - [x] Create Project via Python SDK
+- [x] Adjust Tab View
 
 ### Evaluation
+- [ ] Validate task count with s3 storage (to avoid annotator deleting task)
+- [ ] Validate tasks all annotated
 - [ ] Evaluate annotator performance
 - [ ] Evaluate annotation quality
 

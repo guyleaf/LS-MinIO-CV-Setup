@@ -166,3 +166,5 @@ docker-compose.app.yml
 deploy/*
 !deploy/.gitkeep
 !deploy/uwsgi.ini
+
+projects.json
