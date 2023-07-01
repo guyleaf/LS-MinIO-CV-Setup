@@ -10,7 +10,7 @@ from minio.helpers import ObjectWriteResult
 from rich.progress import track
 
 from .. import settings
-from ..datasets import ImageDataset
+from ..datasets.common import TorchImageDataset
 from ..utils import connect_minio, console, err_console, generate_token
 from .utils import validate_path
 
@@ -60,8 +60,8 @@ def create_task_format(id: int, bucket_name: str, object_name: str, image_path: 
     return dict(
         data=dict(
             image=f"s3://{bucket_name}/{object_name}",
+            data_id=id,
             metadata=dict(
-                id=id,
                 path=image_path,
                 bucket_name=bucket_name,
                 object_name=object_name,
@@ -71,7 +71,7 @@ def create_task_format(id: int, bucket_name: str, object_name: str, image_path: 
 
 
 def upload_data(data_dir: str, bucket_name: str, minio_client: minio.Minio):
-    dataset = ImageDataset(data_dir, load_image=False)
+    dataset = TorchImageDataset(data_dir, load_image=False)
     total = len(dataset)
 
     console.log("Total images:", total)

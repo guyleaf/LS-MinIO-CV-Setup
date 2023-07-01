@@ -2,10 +2,10 @@ version: "3.9"
 services:
   nginx:
     depends_on:
-    {%- for index in range(1, num_apps + 1) %}
+    {%- for index in range(0, num_apps + 1) %}
       - app-{{index}}
     {%- endfor %}
-  {% for index in range(1, num_apps + 1) %}
+  {% for index in range(0, num_apps + 1) %}
   app-{{index}}:
     stdin_open: true
     tty: true
@@ -27,8 +27,13 @@ services:
       - LABEL_STUDIO_HOST=${LABEL_STUDIO_HOST}/{{index}}
       - JSON_LOG=1
       - LABEL_STUDIO_DISABLE_SIGNUP_WITHOUT_LINK=${LABEL_STUDIO_DISABLE_SIGNUP_WITHOUT_LINK:-true}
+      {% if index == 0 %}
+      - LABEL_STUDIO_USERNAME=${LABEL_STUDIO_REVIEW_USER}
+      - LABEL_STUDIO_PASSWORD=${LABEL_STUDIO_REVIEW_PASSWORD}
+      {% else %}
       - LABEL_STUDIO_USERNAME=${LABEL_STUDIO_USERNAME_{{index}}}
       - LABEL_STUDIO_PASSWORD=${LABEL_STUDIO_PASSWORD_{{index}}}
+      {% endif %}
       - LABEL_STUDIO_USER_TOKEN=${LABEL_STUDIO_USER_TOKEN}
       - LOG_LEVEL=WARNING
       # disable label-studio bug tracker
@@ -43,6 +48,6 @@ services:
     command: label-studio-uwsgi
   {% endfor %}
 volumes:
-{%- for index in range(1, num_apps + 1) %}
+{%- for index in range(0, num_apps + 1) %}
   app-{{index}}-data:
 {%- endfor %}

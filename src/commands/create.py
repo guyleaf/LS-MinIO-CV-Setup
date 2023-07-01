@@ -1,7 +1,7 @@
 import json
 import os
 import timeit
-from typing import Annotated
+from typing import Annotated, Optional
 
 import minio
 import typer
@@ -17,6 +17,7 @@ from ..utils import (
     console,
     count_tasks_in_bucket,
     create_view,
+    is_xml,
     sync_storage,
 )
 from .utils import validate_path
@@ -47,8 +48,9 @@ _BUCKETS_ARGUMENT = Annotated[
 
 
 def create_project(project_name: str, label_config: str, ls_client: Client) -> Project:
-    with open(label_config, "r") as f:
-        label_config = f.read()
+    if not is_xml(label_config):
+        with open(label_config, "r") as f:
+            label_config = f.read()
 
     check_ls_connection(ls_client)
     project = ls_client.start_project(
@@ -67,7 +69,13 @@ def create_project(project_name: str, label_config: str, ls_client: Client) -> P
     return project
 
 
-def import_data(project: Project, buckets: list[str], minio_client: minio.Minio):
+def import_data(
+    project: Project,
+    buckets: list[str],
+    minio_client: minio.Minio,
+    regex_filter: Optional[str] = None,
+    total_tasks: Optional[int] = None,
+):
     check_ls_connection(project)
     console.log(
         "[bold yellow]Note: please ignore 502, 504, and 404 error in this step",
@@ -77,10 +85,12 @@ def import_data(project: Project, buckets: list[str], minio_client: minio.Minio)
     status = console.status("[yellow]Importing data...")
     status.start()
     for bucket in buckets:
-        total_tasks = count_tasks_in_bucket(minio_client, bucket)
+        if total_tasks is None:
+            total_tasks = count_tasks_in_bucket(minio_client, bucket)
         storage: dict = project.connect_s3_import_storage(
             bucket,
             prefix="tasks/",
+            regex_filter=regex_filter,
             use_blob_urls=False,
             title=bucket,
             aws_access_key_id=settings.MINIO_ROOT_USER,

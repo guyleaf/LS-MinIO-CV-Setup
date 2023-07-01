@@ -1,6 +1,7 @@
 import secrets
 from typing import Union
 from urllib.parse import urlparse
+from xml.etree import ElementTree
 
 import minio
 from label_studio_sdk import Client, Project
@@ -80,3 +81,11 @@ def get_storages(project: Project) -> list[dict]:
     params = dict(project=project.params["id"])
     response = project.make_request("GET", "/api/storages", params=params)
     return response.json()
+
+
+def is_xml(content: str):
+    try:
+        ElementTree.fromstring(content)
+    except ElementTree.ParseError:
+        return False
+    return True

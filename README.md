@@ -36,10 +36,11 @@ A project for processing data and building project for label studio for Computer
 - [x] Adjust Tab View
 
 ### Evaluation
-- [ ] Validate task count with s3 storage (to avoid annotator deleting task)
-- [ ] Validate tasks all annotated
+- [x] Validate task count with s3 storage (to avoid annotator deleting task)
+- [x] Validate tasks all annotated
 - [ ] Evaluate annotator performance
 - [ ] Evaluate annotation quality
+- [ ] Make workflow more generalized
 
 ### Export
 - [ ] Export annotations

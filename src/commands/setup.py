@@ -62,14 +62,16 @@ def render_env_template(
 
     # generate tokens
     ls_token = generate_token(settings.LS_TOKEN_LENGTH)
-    ls_passwords = [
+    ls_reviewer_password = generate_token(settings.LS_PASSWORD_LENGTH)
+    ls_app_passwords = [
         generate_token(settings.LS_PASSWORD_LENGTH) for _ in range(num_annotators)
     ]
     minio_password = generate_token(settings.MINIO_PASSWORD_LENGTH)
 
     result = template.render(
         ls_token=ls_token,
-        ls_passwords=ls_passwords,
+        ls_reviewer_password=ls_reviewer_password,
+        ls_app_passwords=ls_app_passwords,
         minio_password=minio_password,
         ls_host=ls_host,
         minio_host=minio_host,
@@ -100,14 +102,12 @@ def render_nginx_template(host: str, env: Environment) -> str:
     return result
 
 
-def print_start_hints(out_dir: str):
+def print_start_hints():
     console.log("[bold green]Finished.")
 
-    compose_path = os.path.join(out_dir, "docker-compose.yml")
-    app_compose_path = os.path.join(
-        out_dir, settings.APP_COMPOSE_TEMPLATE.removesuffix(settings.TEMPLATE_SUFFIX)
-    )
-    minio_compose_path = os.path.join(out_dir, "docker-compose.minio.yml")
+    compose_path = "docker-compose.yml"
+    app_compose_path = settings.APP_COMPOSE_TEMPLATE.removesuffix(settings.TEMPLATE_SUFFIX)
+    minio_compose_path = "docker-compose.minio.yml"
 
     console.log("\nPlease run this command to start the service:")
     console.log(f"[blue]docker compose -f {compose_path} -f {app_compose_path} up -d")
@@ -130,10 +130,9 @@ def setup(
     ls_host: _LS_HOST_ARGUMENT = "http://localhost:8085/app",
     minio_host: _MINIO_HOST_ARGUMENT = "http://localhost:9000",
     templates_dir: _TEMPLATES_DIR_ARGUMENT = "templates",
-    out_dir: str = ".",
 ):
-    # create out_dir if not exist
-    os.makedirs(out_dir, exist_ok=True)
+    if os.path.exists(settings.PROJECTS_MAP):
+        os.remove(settings.PROJECTS_MAP)
 
     console.log("Number of annotators:", num_annotators)
 
@@ -141,37 +140,28 @@ def setup(
     env = Environment(loader=FileSystemLoader(templates_dir))
     with console.status("[bold green]Rendering templates..."):
         env_content = render_env_template(num_annotators, ls_host, minio_host, env)
-        env_path = os.path.join(
-            out_dir, settings.ENV_TEMPLATE.removesuffix(settings.TEMPLATE_SUFFIX)
-        )
+        env_path = settings.ENV_TEMPLATE.removesuffix(settings.TEMPLATE_SUFFIX)
         console.log("Rendered env template [green]successfully[/].")
 
         if not load_dotenv(stream=StringIO(env_content)):
-            raise RuntimeError("Error: invalid env file.")
+            raise RuntimeError("Error: invalid env content.")
 
         nginx_content = render_nginx_template(
             os.environ.get("LABEL_STUDIO_HOST", ""), env
         )
-        nginx_path = os.path.join(
-            out_dir, settings.NGINX_TEMPLATE.removesuffix(settings.TEMPLATE_SUFFIX)
-        )
+        nginx_path = settings.NGINX_TEMPLATE.removesuffix(settings.TEMPLATE_SUFFIX)
         console.log("Rendered nginx template [green]successfully[/].")
 
         app_compose_content = render_app_compose_template(num_annotators, env)
-        app_compose_path = os.path.join(
-            out_dir,
-            settings.APP_COMPOSE_TEMPLATE.removesuffix(settings.TEMPLATE_SUFFIX),
-        )
+        app_compose_path = settings.APP_COMPOSE_TEMPLATE.removesuffix(settings.TEMPLATE_SUFFIX)
         console.log("Rendered app compose template [green]successfully[/].")
 
         init_db_content = render_init_db_template(num_annotators, env)
-        init_db_path = os.path.join(
-            out_dir, settings.INIT_DB_TEMPLATE.removesuffix(settings.TEMPLATE_SUFFIX)
-        )
+        init_db_path = settings.INIT_DB_TEMPLATE.removesuffix(settings.TEMPLATE_SUFFIX)
         console.log("Rendered init db template [green]successfully[/].")
 
     save_template(env_path, env_content)
     save_template(nginx_path, nginx_content)
     save_template(app_compose_path, app_compose_content)
     save_template(init_db_path, init_db_content)
-    print_start_hints(out_dir)
+    print_start_hints()
