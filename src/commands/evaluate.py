@@ -6,25 +6,37 @@ from typing import Annotated, Optional, Union
 
 import minio
 import numpy as np
-import torch
+import pandas as pd
 import typer
+from cleanlab.multiannotator import get_label_quality_multiannotator
 from label_studio_sdk import Client, Project
 from label_studio_sdk.data_manager import Column, Filters, Operator, Type
-from rich.progress import track
+from rich.align import Align
+from rich.layout import Layout
+from rich.panel import Panel
 from rich.prompt import Prompt
 from rich.table import Table
-from torch.utils.data import DataLoader
+from rich.text import Text
 
 from .. import settings
-from ..datasets.weather import WeatherImagesDataset
-from ..models.weather import WeatherModel
 from ..utils import (
     check_ls_connection,
     connect_minio,
     console,
+    convert_annotations_to_probabilities,
+    convert_df_to_rich_table,
     count_tasks_in_bucket,
     err_console,
     get_storages,
+)
+from ..works.intensity import (
+    collect_intensity_level_from_tasks,
+    get_intensity_classes,
+    measure_intensity_level,
+)
+from ..works.weather import (
+    collect_weather_from_tasks,
+    predict_weathers,
 )
 from .create import create_project, import_data
 from .utils import validate_path
@@ -293,39 +305,14 @@ def download_object_files(
     return object_files
 
 
-@torch.no_grad()
-def predict_weathers(root_dir: str, ckpt_path: str) -> np.ndarray:
-    device = torch.device("cuda")
-    dataset = WeatherImagesDataset(root_dir)
-    dataloader = DataLoader(
-        dataset, batch_size=16, shuffle=False, pin_memory=True, num_workers=4
-    )
+def collect_tasks(
+    review_project: Project, projects: list[Union[Project, None]]
+) -> tuple[list[dict], list[list[dict]]]:
+    # sorted by data_id in ascending order
+    ordering = [Column.data("data_id")]
+    review_tasks: list[dict] = review_project.get_tasks(ordering=ordering)
 
-    model = WeatherModel(ckpt_path)
-    model.eval()
-    model = model.to(device)
-
-    batch_predictions = []
-    for images in track(dataloader, description="Predicting...", total=len(dataloader)):
-        images: torch.Tensor
-        images = images.to(device)
-        batch_predictions.append(model(images).cpu())
-
-    return torch.concatenate(batch_predictions).numpy()
-
-
-def measure_intensity(root_dir: str) -> np.ndarray:
-    pass
-
-def evaluate_annotations(
-    ckpt_path: str,
-    review_project: Project,
-    projects: list[Union[Project, None]],
-    minio_client: minio.Minio,
-):
-    review_tasks: list[dict] = review_project.tasks
-    storage_images = collect_storage_images(review_tasks)
-    Filters.create(
+    filters = Filters.create(
         Filters.AND,
         [
             Filters.item(
@@ -337,19 +324,160 @@ def evaluate_annotations(
         ],
     )
 
+    annotators_tasks = []
+    for project in projects:
+        if project is None:
+            annotators_tasks.append([])
+            continue
+        annotators_tasks.append(project.get_tasks(filters=filters, ordering=ordering))
+
+    return review_tasks, annotators_tasks
+
+
+def make_metric_table(layout: Layout, metric: dict[str, pd.DataFrame]) -> Layout:
+    grid = Table(show_lines=True)
+    detailed_label_quality_table = convert_df_to_rich_table(
+        metric["detailed_label_quality"], grid, index_name="Samples"
+    )
+    grid = Table(show_lines=True)
+    label_quality_table = convert_df_to_rich_table(
+        metric["label_quality"], grid, index_name="Samples"
+    )
+    grid = Table(show_lines=True)
+    annotator_performance_table = convert_df_to_rich_table(
+        metric["annotator_stats"].sort_index(), grid, index_name="Annotators"
+    )
+
+    top_layout = Layout(
+        Panel(
+            Align.center(detailed_label_quality_table, pad=False, vertical="middle"),
+            title="Detailed Label Quality",
+            border_style="green",
+        )
+    )
+    down_layout = Layout()
+    down_layout.split_row(
+        Layout(
+            Panel(
+                Align.center(label_quality_table, pad=False, vertical="middle"),
+                title="Label Quality",
+                border_style="green",
+            )
+        ),
+        Layout(
+            Panel(
+                Align.center(annotator_performance_table, pad=False, vertical="middle"),
+                title="Annotator performance",
+                border_style="green",
+            )
+        ),
+    )
+    layout.split_column(top_layout, down_layout)
+    return layout
+
+
+def make_metrics_table(
+    name: str, annotations: np.ndarray, predict_hats: np.ndarray
+) -> list[Layout]:
+    # trasnpose to (N, K)
+    # K is number of annotators
+    annotations = annotations.transpose()
+
+    simple_weather_quality = get_label_quality_multiannotator(
+        annotations,
+        predict_hats,
+        consensus_method="majority_vote",
+        quality_method="agreement",
+    )
+    majority_weather_quality = get_label_quality_multiannotator(
+        annotations,
+        predict_hats,
+        consensus_method="majority_vote",
+    )
+    best_weather_quality = get_label_quality_multiannotator(
+        annotations,
+        predict_hats,
+        consensus_method="best_quality",
+    )
+
+    layouts = [
+        Panel(Text(name, justify="center"), border_style="bright_blue"),
+        Panel(Text("Simple-agreement", justify="center"), border_style="bright_yellow"),
+        make_metric_table(Layout(), simple_weather_quality),
+        Panel(Text("Majority-vote", justify="center"), border_style="bright_yellow"),
+        make_metric_table(Layout(), majority_weather_quality),
+        Panel(Text("Best-quality", justify="center"), border_style="bright_yellow"),
+        make_metric_table(Layout(), best_weather_quality),
+    ]
+    return layouts
+
+
+def evaluate_annotations(
+    ckpt_path: str,
+    review_project: Project,
+    projects: list[Union[Project, None]],
+    minio_client: minio.Minio,
+):
+    status = console.status("[yellow]Evaluating annotations...")
+    status.start()
+
+    console.log("[blue]Collecting tasks...")
+    review_tasks, annotators_tasks = collect_tasks(review_project, projects)
+
+    # collect annotations from reviewer
+    console.log("[blue]Collecting annotations...")
+    review_weathers = collect_weather_from_tasks(review_tasks)
+    review_intensities = collect_intensity_level_from_tasks(review_tasks)[0]
+
+    # convert class ids to probability
+    # convert_annotations_to_probabilities(review_weathers, len(get_weather_classes()))
+    # convert_annotations_to_probabilities(
+    #     review_intensities, len(get_intensity_classes())
+    # )
+
+    # collect annotations from annotators
+    annotators_weathers = [review_weathers]
+    annotators_intensities = [review_intensities]
+    for tasks in annotators_tasks:
+        if len(tasks) == 0:
+            continue
+
+        annotators_weathers.append(collect_weather_from_tasks(tasks))
+        annotators_intensities.append(collect_intensity_level_from_tasks(tasks)[0])
+    annotators_weathers = np.stack(annotators_weathers, axis=0)
+    annotators_intensities = np.stack(annotators_intensities, axis=0)
+
+    # create temporary folder
     tmp_dir = tempfile.TemporaryDirectory()
 
     # download images to temporary folder
+    console.log("[blue]Downloading sampled images...")
+    storage_images = collect_storage_images(review_tasks)
     download_object_files(tmp_dir.name, minio_client, storage_images)
 
-    weather_predictions = predict_weathers(tmp_dir.name, ckpt_path)
-    measure_intensity(tmp_dir.name)
+    status.stop()
 
-    console.print(weather_predictions)
-    # for task in review_tasks:
-    #     task["annotations"]
+    # predict labels
+    console.log("[blue]Predicting labels...")
+    _, weather_hats = predict_weathers(tmp_dir.name, ckpt_path)
+    intensity_levels = measure_intensity_level(tmp_dir.name)
+    intensity_hats = convert_annotations_to_probabilities(
+        intensity_levels, len(get_intensity_classes())
+    )
+
+    status.start()
+    console.log("[blue]Generating metics tables...")
+    weather_layouts = make_metrics_table("Weather", annotators_weathers, weather_hats)
+    intensity_layouts = make_metrics_table(
+        "Intensity", annotators_intensities, intensity_hats
+    )
+
+    console.print(*weather_layouts, sep="\n")
+    console.print("\n")
+    console.print(*intensity_layouts, sep="\n")
 
     tmp_dir.cleanup()
+    status.stop()
 
 
 def evaluate(
@@ -374,8 +502,9 @@ def evaluate(
         projects, num_review_samples, ls_review_client, review_project_id, minio_client
     )
 
-    Prompt.ask(
-        "Press any key to continue if reviewer finished labeling...", console=console
+    console.print(
+        "[bold]Press Enter to continue if reviewer finished labeling...", end=""
     )
+    console.input()
 
     evaluate_annotations(ckpt_path, review_project, projects, minio_client)

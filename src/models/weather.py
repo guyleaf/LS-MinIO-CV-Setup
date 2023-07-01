@@ -26,5 +26,4 @@ class WeatherModel(nn.Module):
         self.model.eval()
 
     def forward(self, images: torch.Tensor) -> torch.Tensor:
-        y_hat = self.model(images)
-        return torch.argmax(y_hat, dim=-1)
+        return self.model(images)

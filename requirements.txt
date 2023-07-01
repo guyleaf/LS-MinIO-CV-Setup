@@ -7,3 +7,5 @@ Jinja2
 pyyaml
 numpy
 Pillow
+cleanlab
+pandas

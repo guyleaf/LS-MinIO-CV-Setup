@@ -10,7 +10,7 @@ from minio.helpers import ObjectWriteResult
 from rich.progress import track
 
 from .. import settings
-from ..datasets.common import TorchImageDataset
+from ..datasets.common import ImageDataset
 from ..utils import connect_minio, console, err_console, generate_token
 from .utils import validate_path
 
@@ -71,7 +71,7 @@ def create_task_format(id: int, bucket_name: str, object_name: str, image_path: 
 
 
 def upload_data(data_dir: str, bucket_name: str, minio_client: minio.Minio):
-    dataset = TorchImageDataset(data_dir, load_image=False)
+    dataset = ImageDataset(data_dir)
     total = len(dataset)
 
     console.log("Total images:", total)
