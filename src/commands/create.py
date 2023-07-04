@@ -1,6 +1,7 @@
 import json
 import os
 import timeit
+from time import sleep
 from typing import Annotated, Optional
 
 import minio
@@ -107,6 +108,7 @@ def import_data(
             except HTTPError as e:
                 if e.response.status_code not in (504, 502):
                     raise
+                sleep(3)
 
             current_counts = len(project.tasks_ids)
             console.log("Number of tasks imported:", current_counts, "/", total_tasks)
