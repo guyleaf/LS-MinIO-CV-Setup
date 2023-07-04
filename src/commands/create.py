@@ -146,7 +146,7 @@ def create(
         ls_host = f"{settings.LABEL_STUDIO_HOST}/{app_id}"
         ls_client = Client(ls_host, settings.LABEL_STUDIO_USER_TOKEN)
         project = create_project(project_name, label_config, ls_client)
-        import_data(project, buckets, minio_client)
+        import_data(project, buckets, minio_client, regex_filter=".*json")
         console.log(f"\[app-{app_id}] Imported data [green]successfully[/].")
 
         project_ids.append(project.params["id"])
