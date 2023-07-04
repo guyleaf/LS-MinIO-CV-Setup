@@ -8,7 +8,10 @@ import minio
 import numpy as np
 import pandas as pd
 import typer
-from cleanlab.multiannotator import get_label_quality_multiannotator
+from cleanlab.multiannotator import (
+    get_label_quality_multiannotator,
+    get_label_quality_multiannotator_ensemble,
+)
 from label_studio_sdk import Client, Project
 from label_studio_sdk.data_manager import Column, Filters, Operator, Type
 from rich.align import Align
@@ -23,7 +26,6 @@ from ..utils import (
     check_ls_connection,
     connect_minio,
     console,
-    convert_annotations_to_probabilities,
     convert_df_to_rich_table,
     count_tasks_in_bucket,
     err_console,
@@ -31,12 +33,11 @@ from ..utils import (
 )
 from ..works.intensity import (
     collect_intensity_level_from_tasks,
-    get_intensity_classes,
-    measure_intensity_level,
+    predict_intensity_ensemble,
 )
 from ..works.weather import (
     collect_weather_from_tasks,
-    predict_weathers,
+    predict_weathers_ensemble,
 )
 from .create import create_project, import_data
 from .utils import validate_path
@@ -146,26 +147,6 @@ def are_inner_id_and_data_id_same(tasks: list[dict]) -> bool:
     return True
 
 
-def are_annotations_correct(tasks: list[dict]) -> list[str]:
-    errors = []
-    for task in tasks:
-        task_id = task["id"]
-        annotations = task["annotations"]
-        if len(annotations) > 1:
-            errors.append(f"\[task-{task_id}]The annotation should be only one.")
-
-        intensities = []
-        for result in annotations[0]["result"]:
-            name: str = result["from_name"]
-            if name.startswith("intensity"):
-                intensities.append(result["value"]["choices"][0])
-
-        if len(intensities) != len(tuple(intensities)):
-            errors.append(f"\[task-{task_id}]The intensity choices should be unique.")
-
-    return errors
-
-
 def validate_annotations(
     projects: list[Union[Project, None]], minio_client: minio.Minio
 ):
@@ -208,13 +189,6 @@ def validate_annotations(
             errors.append(
                 f"There are {total_unlabeled_tasks} unlabeled tasks in project."
             )
-
-        # task-specific: check annotation rules
-        if len(errors) == 0:
-            error_msgs = are_annotations_correct(tasks)
-            if len(error_msgs) != 0:
-                errors.append("Invalid annotations.")
-                errors.extend(error_msgs)
 
         status.stop()
 
@@ -335,13 +309,17 @@ def collect_tasks(
 
 
 def make_metric_table(layout: Layout, metric: dict[str, pd.DataFrame]) -> Layout:
+    # reorder by worst quality
+    label_quality = metric["label_quality"].sort_values("consensus_quality_score")
+    detailed_label_quality = metric["detailed_label_quality"].iloc[label_quality.index]
+
     grid = Table(show_lines=True)
     detailed_label_quality_table = convert_df_to_rich_table(
-        metric["detailed_label_quality"], grid, index_name="Samples"
+        detailed_label_quality, grid, index_name="Samples"
     )
     grid = Table(show_lines=True)
     label_quality_table = convert_df_to_rich_table(
-        metric["label_quality"], grid, index_name="Samples"
+        label_quality, grid, index_name="Samples"
     )
     grid = Table(show_lines=True)
     annotator_performance_table = convert_df_to_rich_table(
@@ -383,21 +361,25 @@ def make_metrics_table(
     # K is number of annotators
     annotations = annotations.transpose()
 
+    # weather, clip = predict_hats
     simple_weather_quality = get_label_quality_multiannotator(
         annotations,
-        predict_hats,
+        predict_hats[0],
         consensus_method="majority_vote",
         quality_method="agreement",
     )
     majority_weather_quality = get_label_quality_multiannotator(
         annotations,
-        predict_hats,
+        predict_hats[0],
         consensus_method="majority_vote",
     )
     best_weather_quality = get_label_quality_multiannotator(
         annotations,
-        predict_hats,
+        predict_hats[0],
         consensus_method="best_quality",
+    )
+    ensemble_weather_quality = get_label_quality_multiannotator_ensemble(
+        annotations, predict_hats
     )
 
     layouts = [
@@ -408,6 +390,11 @@ def make_metrics_table(
         make_metric_table(Layout(), majority_weather_quality),
         Panel(Text("Best-quality", justify="center"), border_style="bright_yellow"),
         make_metric_table(Layout(), best_weather_quality),
+        Panel(
+            Text("Ensemble (Best-quality)", justify="center"),
+            border_style="bright_yellow",
+        ),
+        make_metric_table(Layout(), ensemble_weather_quality),
     ]
     return layouts
 
@@ -459,11 +446,8 @@ def evaluate_annotations(
 
     # predict labels
     console.log("[blue]Predicting labels...")
-    _, weather_hats = predict_weathers(tmp_dir.name, ckpt_path)
-    intensity_levels = measure_intensity_level(tmp_dir.name)
-    intensity_hats = convert_annotations_to_probabilities(
-        intensity_levels, len(get_intensity_classes())
-    )
+    _, weather_hats = predict_weathers_ensemble(tmp_dir.name, ckpt_path)
+    _, intensity_hats = predict_intensity_ensemble(tmp_dir.name, thresholds=[0.3, 0.67])
 
     status.start()
     console.log("[blue]Generating metics tables...")

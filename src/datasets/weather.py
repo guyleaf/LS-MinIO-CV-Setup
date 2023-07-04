@@ -1,21 +1,23 @@
+from typing import Callable, Optional
+
 import torch
 from torch.utils.data import Dataset
-from uav_research.transforms.weather import WeatherPreprocessTransform
 
-from ..datasets.common import ImageDataset
+from .common import ImageDataset
 
 WEATHER_CLASSES = ["clear", "cloudy", "foggy", "rainy", "snowy"]
 WEATHER_CLASS_TO_ID = {class_: id for id, class_ in enumerate(WEATHER_CLASSES)}
 
 
 class WeatherImagesDataset(Dataset[torch.Tensor]):
-    def __init__(self, root_dir: str) -> None:
-        self.transforms = WeatherPreprocessTransform(crop_size=384, train=False)
+    def __init__(self, root_dir: str, transforms: Optional[Callable] = None) -> None:
+        self.transforms = transforms
         self.dataset = ImageDataset(root_dir)
 
     def __getitem__(self, index: int) -> torch.Tensor:
         image, _, _ = self.dataset[index]
-        image = self.transforms(image)
+        if self.transforms is not None:
+            image = self.transforms(image)
         return image
 
     def __len__(self) -> int:

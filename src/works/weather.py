@@ -1,7 +1,9 @@
+import clip
 import numpy as np
 import torch
 from rich.progress import track
 from torch.utils.data import DataLoader
+from uav_research.transforms.weather import WeatherPreprocessTransform
 
 from ..datasets.weather import (
     WEATHER_CLASS_TO_ID,
@@ -10,28 +12,81 @@ from ..datasets.weather import (
 )
 from ..models.weather import WeatherModel
 
+CLIP_MODEL = "ViT-B/16"
 
-@torch.no_grad()
-def predict_weathers(root_dir: str, ckpt_path: str) -> tuple[np.ndarray, np.ndarray]:
-    device = torch.device("cpu")
-    dataset = WeatherImagesDataset(root_dir)
+
+def predict_weathers_by_clip(
+    root_dir: str, device: torch.device
+) -> tuple[torch.Tensor, torch.Tensor]:
+    model, preprocess = clip.load(CLIP_MODEL, device=device)
+    tokens = clip.tokenize(
+        [f"The weather is {class_name.lower()}." for class_name in WEATHER_CLASSES]
+    ).to(device)
+    dataset = WeatherImagesDataset(root_dir, transforms=preprocess)
     dataloader = DataLoader(
         dataset, batch_size=16, shuffle=False, pin_memory=True, num_workers=4
     )
 
+    batch_y_hats = []
+    for images in track(dataloader, description="Predicting...", total=len(dataloader)):
+        images: torch.Tensor
+        images = images.to(device, non_blocking=True)
+        logits, _ = model(images, tokens)
+        y_hats = torch.softmax(logits, -1)
+
+        batch_y_hats.append(y_hats.cpu())
+    y_hats = torch.concatenate(batch_y_hats, dim=0)
+    predictions = torch.argmax(y_hats, dim=1)
+
+    return (
+        predictions,
+        y_hats,
+    )
+
+
+def predict_weathers_by_weather(
+    root_dir: str, ckpt_path: str, device: torch.device
+) -> tuple[torch.Tensor, torch.Tensor]:
     model = WeatherModel(ckpt_path)
     model.eval()
     model = model.to(device)
 
+    dataset = WeatherImagesDataset(
+        root_dir, transforms=WeatherPreprocessTransform(crop_size=384, train=False)
+    )
+    dataloader = DataLoader(
+        dataset, batch_size=16, shuffle=False, pin_memory=True, num_workers=4
+    )
+
     batch_y_hats = []
     for images in track(dataloader, description="Predicting...", total=len(dataloader)):
         images: torch.Tensor
-        images = images.to(device)
+        images = images.to(device, non_blocking=True)
         y_hats = model(images)
 
         batch_y_hats.append(y_hats.cpu())
     y_hats = torch.concatenate(batch_y_hats, dim=0)
     predictions = torch.argmax(y_hats, dim=1)
+
+    return (
+        predictions,
+        y_hats,
+    )
+
+
+@torch.no_grad()
+def predict_weathers_ensemble(
+    root_dir: str, ckpt_path: str
+) -> tuple[np.ndarray, np.ndarray]:
+    device = torch.device("cuda")
+
+    weather_predictions, weather_y_hats = predict_weathers_by_weather(
+        root_dir, ckpt_path, device
+    )
+    clip_predictions, clip_y_hats = predict_weathers_by_clip(root_dir, device)
+
+    y_hats = torch.stack([weather_y_hats, clip_y_hats], dim=0)
+    predictions = torch.stack([weather_predictions, clip_predictions], dim=0)
 
     return (
         predictions.numpy(),
