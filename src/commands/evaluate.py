@@ -1,4 +1,3 @@
-import json
 import os
 import random
 import tempfile
@@ -17,7 +16,6 @@ from label_studio_sdk.data_manager import Column, Filters, Operator, Type
 from rich.align import Align
 from rich.layout import Layout
 from rich.panel import Panel
-from rich.prompt import Prompt
 from rich.table import Table
 from rich.text import Text
 
@@ -40,7 +38,7 @@ from ..works.weather import (
     predict_weathers_ensemble,
 )
 from .create import create_project, import_data
-from .utils import validate_int_range, validate_path
+from .utils import make_ls_clients, select_project, validate_int_range, validate_path
 
 #################################################################################
 
@@ -88,79 +86,6 @@ _VALIDATE_ARGUMENT = Annotated[
 
 
 #################################################################################
-
-
-def make_clients(
-    apps: list[int],
-) -> tuple[minio.Minio, list[Union[Client, None]], Client]:
-    minio_client = connect_minio(
-        settings.MINIO_HOST, settings.MINIO_ROOT_USER, settings.MINIO_ROOT_PASSWORD
-    )
-
-    ls_clients = [
-        Client(
-            f"{settings.LABEL_STUDIO_HOST}/{app_id}", settings.LABEL_STUDIO_USER_TOKEN
-        )
-        if app_id in apps
-        else None
-        for app_id in range(1, settings.NUM_LABEL_STUDIO_APPS + 1)
-    ]
-    ls_review_client = Client(
-        f"{settings.LABEL_STUDIO_HOST}/0", settings.LABEL_STUDIO_USER_TOKEN
-    )
-    return minio_client, ls_clients, ls_review_client
-
-
-def make_projects_table(projects_map: list[dict], title: str = "Projects") -> Table:
-    table = Table(title=title)
-    table.add_column("#")
-    table.add_column("Name", style="cyan")
-    for app_id in range(1, settings.NUM_LABEL_STUDIO_APPS + 1):
-        table.add_column(f"ID in app-{app_id}", style="green")
-
-    for row_id, project_map in enumerate(projects_map):
-        table.add_row(str(row_id), project_map["name"], *map(str, project_map["ids"]))
-    return table
-
-
-def select_project(ls_clients: list[Union[Client, None]]) -> list[Union[Project, None]]:
-    if not os.path.exists(settings.PROJECTS_MAP):
-        raise RuntimeError(f"Cannot find projects map {settings.PROJECTS_MAP}.")
-    with open(settings.PROJECTS_MAP, "r") as f:
-        projects_map: list[dict] = json.load(f)
-
-    if len(projects_map) == 0:
-        raise RuntimeError("You haven't created any project.")
-
-    # select project from table
-    table = make_projects_table(projects_map)
-    console.print(table, justify="center")
-
-    while True:
-        row_id = Prompt.ask(
-            "Which project you'd like to evaluate?",
-            console=console,
-            default=str(len(projects_map) - 1),
-        )
-        row_id = int(row_id)
-
-        if row_id >= 0 and row_id < table.row_count:
-            break
-        console.print("[red]Please select one of the available options.")
-
-    project_name = projects_map[row_id]["name"]
-    console.log(f"You selected {project_name} project.")
-
-    # get projects by id
-    projects = []
-    project_ids = projects_map[row_id]["ids"]
-    for project_id, ls_client in zip(project_ids, ls_clients):
-        if ls_client is None:
-            projects.append(None)
-        else:
-            check_ls_connection(ls_client)
-            projects.append(ls_client.get_project(project_id))
-    return projects
 
 
 def are_inner_id_and_data_id_same(tasks: list[dict]) -> bool:
@@ -496,7 +421,10 @@ def evaluate(
     validate: _VALIDATE_ARGUMENT = True,
 ):
     random.seed(seed)
-    minio_client, ls_clients, ls_review_client = make_clients(apps)
+    minio_client = connect_minio(
+        settings.MINIO_HOST, settings.MINIO_ROOT_USER, settings.MINIO_ROOT_PASSWORD
+    )
+    ls_clients, ls_review_client = make_ls_clients(apps)
     projects = select_project(ls_clients)
 
     if validate:

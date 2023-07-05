@@ -17,7 +17,7 @@ app.command(help="Create a label studio project and import data from MinIO.")(
 
 app.command(help="Evaluate annotators and annotations.")(commands.evaluate)
 
-# TODO: export annotation
+app.command(help="Export annotations from label studio project.")(commands.export)
 
 
 if __name__ == "__main__":

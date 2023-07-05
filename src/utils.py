@@ -72,10 +72,7 @@ def sync_storage(
 
 
 def create_view(project: Project, data: dict) -> dict:
-    data = {
-        "project": project.params["id"],
-        "data": data,
-    }
+    data = dict(project=project.params["id"], data=data)
     response = project.make_request("POST", "/api/dm/views", json=data)
     return response.json()
 
@@ -83,6 +80,15 @@ def create_view(project: Project, data: dict) -> dict:
 def get_storages(project: Project) -> list[dict]:
     params = dict(project=project.params["id"])
     response = project.make_request("GET", "/api/storages", params=params)
+    return response.json()
+
+
+def convert_export(project: Project, export_id: int, export_type: str):
+    id = project.params["id"]
+    data = dict(export_type=export_type)
+    response = project.make_request(
+        "POST", f"/api/projects/{id}/exports/{export_id}/convert", json=data
+    )
     return response.json()
 
 
