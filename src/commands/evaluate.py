@@ -40,26 +40,49 @@ from ..works.weather import (
     predict_weathers_ensemble,
 )
 from .create import create_project, import_data
-from .utils import validate_path
+from .utils import validate_int_range, validate_path
 
 #################################################################################
 
 
 # Argument type hints
-_PROJECT_NAME_ARGUMENT = Annotated[
+_CHECKPOINT_ARGUMENT = Annotated[
     str,
-    typer.Argument(help="The name of label studio project"),
+    typer.Argument(help="The path of model checkpoint", callback=validate_path),
 ]
 
-_LABEL_CONFIG_ARGUMENT = Annotated[
-    str,
-    typer.Argument(help="The path of label config", callback=validate_path),
-]
-
-_BUCKETS_ARGUMENT = Annotated[
-    list[str],
+_NUM_REVIEW_SAMPLES_ARGUMENT = Annotated[
+    int,
     typer.Option(
-        help="The list of buckets you'd like to import. If it is empty, import all buckets",
+        help="The number of review samples", callback=validate_int_range(1, 1000)
+    ),
+]
+
+_APPS_ARGUMENT = Annotated[
+    list[int],
+    typer.Option(
+        help="The list of apps you'd like to evaluate",
+    ),
+]
+
+_REVIEW_PROJECT_ID_ARGUMENT = Annotated[
+    Optional[int],
+    typer.Option(
+        help="Use the id of project in review app to evaluate",
+    ),
+]
+
+_SEED_ARGUMENT = Annotated[
+    int,
+    typer.Option(
+        help="The seed of sampling tasks",
+    ),
+]
+
+_VALIDATE_ARGUMENT = Annotated[
+    bool,
+    typer.Option(
+        help="Whether execute the validation step or not",
     ),
 ]
 
@@ -465,16 +488,13 @@ def evaluate_annotations(
 
 
 def evaluate(
-    ckpt_path: str,
-    num_review_samples: int = 50,
-    apps: list[int] = list(range(1, settings.NUM_LABEL_STUDIO_APPS + 1)),
-    review_project_id: Optional[int] = None,
-    seed: int = 1234,
-    validate: bool = True,
+    ckpt_path: _CHECKPOINT_ARGUMENT,
+    num_review_samples: _NUM_REVIEW_SAMPLES_ARGUMENT = 50,
+    apps: _APPS_ARGUMENT = list(range(1, settings.NUM_LABEL_STUDIO_APPS + 1)),
+    review_project_id: _REVIEW_PROJECT_ID_ARGUMENT = None,
+    seed: _SEED_ARGUMENT = 1234,
+    validate: _VALIDATE_ARGUMENT = True,
 ):
-    if not os.path.exists(ckpt_path):
-        raise typer.BadParameter("The checkpoint file does not exist.")
-
     random.seed(seed)
     minio_client, ls_clients, ls_review_client = make_clients(apps)
     projects = select_project(ls_clients)
