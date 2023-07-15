@@ -309,6 +309,9 @@ def make_metrics_table(
     # K is number of annotators
     annotations = annotations.transpose()
 
+    console.print(annotations.shape)
+    console.print(predict_hats.shape)
+
     # weather, clip = predict_hats
     simple_weather_quality = get_label_quality_multiannotator(
         annotations,
