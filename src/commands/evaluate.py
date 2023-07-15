@@ -224,7 +224,7 @@ def download_object_files(
             out_path = os.path.join(out_dir, file.split("/")[-1])
             minio_client.fget_object(bucket, file, out_path)
             object_files.append(out_path)
-    console.print(len(object_files))
+    console.print(len(tuple(object_files)))
     return object_files
 
 
