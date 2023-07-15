@@ -10,9 +10,9 @@ WEATHER_CLASS_TO_ID = {class_: id for id, class_ in enumerate(WEATHER_CLASSES)}
 
 
 class WeatherImagesDataset(Dataset[torch.Tensor]):
-    def __init__(self, root_dir: str, transforms: Optional[Callable] = None) -> None:
+    def __init__(self, files: list[str], transforms: Optional[Callable] = None) -> None:
         self.transforms = transforms
-        self.dataset = ImageDataset(root_dir)
+        self.dataset = ImageDataset(files=files)
 
     def __getitem__(self, index: int) -> torch.Tensor:
         image, _, _ = self.dataset[index]

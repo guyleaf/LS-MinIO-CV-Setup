@@ -16,13 +16,13 @@ CLIP_MODEL = "ViT-B/16"
 
 
 def predict_weathers_by_clip(
-    root_dir: str, device: torch.device
+    files: list[str], device: torch.device
 ) -> tuple[torch.Tensor, torch.Tensor]:
     model, preprocess = clip.load(CLIP_MODEL, device=device)
     tokens = clip.tokenize(
         [f"The weather is {class_name.lower()}." for class_name in WEATHER_CLASSES]
     ).to(device)
-    dataset = WeatherImagesDataset(root_dir, transforms=preprocess)
+    dataset = WeatherImagesDataset(files, transforms=preprocess)
     dataloader = DataLoader(
         dataset, batch_size=16, shuffle=False, pin_memory=True, num_workers=4
     )
@@ -45,14 +45,14 @@ def predict_weathers_by_clip(
 
 
 def predict_weathers_by_weather(
-    root_dir: str, ckpt_path: str, device: torch.device
+    files: list[str], ckpt_path: str, device: torch.device
 ) -> tuple[torch.Tensor, torch.Tensor]:
     model = WeatherModel(ckpt_path)
     model.eval()
     model = model.to(device)
 
     dataset = WeatherImagesDataset(
-        root_dir, transforms=WeatherPreprocessTransform(crop_size=384, train=False)
+        files, transforms=WeatherPreprocessTransform(crop_size=384, train=False)
     )
     dataloader = DataLoader(
         dataset, batch_size=16, shuffle=False, pin_memory=True, num_workers=4
@@ -76,14 +76,14 @@ def predict_weathers_by_weather(
 
 @torch.no_grad()
 def predict_weathers_ensemble(
-    root_dir: str, ckpt_path: str
+    files: list[str], ckpt_path: str
 ) -> tuple[np.ndarray, np.ndarray]:
     device = torch.device("cuda")
 
     weather_predictions, weather_y_hats = predict_weathers_by_weather(
-        root_dir, ckpt_path, device
+        files, ckpt_path, device
     )
-    clip_predictions, clip_y_hats = predict_weathers_by_clip(root_dir, device)
+    clip_predictions, clip_y_hats = predict_weathers_by_clip(files, device)
 
     y_hats = torch.stack([weather_y_hats, clip_y_hats], dim=0)
     predictions = torch.stack([weather_predictions, clip_predictions], dim=0)

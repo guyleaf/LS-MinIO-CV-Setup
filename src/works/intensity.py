@@ -17,7 +17,7 @@ CLIP_MODEL = "ViT-B/16"
 
 @torch.no_grad()
 def predict_intensity_by_clip(
-    root_dir: str, device: torch.device
+    files: list[str], device: torch.device
 ) -> tuple[np.ndarray, np.ndarray]:
     model, preprocess = clip.load(CLIP_MODEL, device=device)
     tokens = clip.tokenize(
@@ -26,7 +26,7 @@ def predict_intensity_by_clip(
             for class_name in INTENSITY_CLASSES
         ]
     ).to(device)
-    dataset = IntensityImagesDataset(root_dir, transforms=preprocess)
+    dataset = IntensityImagesDataset(files, transforms=preprocess)
     dataloader = DataLoader(
         dataset, batch_size=16, shuffle=False, pin_memory=True, num_workers=4
     )
@@ -49,13 +49,13 @@ def predict_intensity_by_clip(
 
 
 def measure_intensity_level(
-    root_dir: str, thresholds: list[float] = [0.33, 0.67]
+    files: list[str], thresholds: list[float] = [0.33, 0.67]
 ) -> np.ndarray:
     if len(thresholds) != 2:
         raise ValueError("The thresholds should only contain two floating values")
 
     levels = []
-    dataset = IntensityImagesDataset(root_dir)
+    dataset = IntensityImagesDataset(files)
     for rgb in dataset:
         lab = skcolor.rgb2lab(rgb)
         intensity = lab[..., 0] / 100
@@ -72,16 +72,16 @@ def measure_intensity_level(
 
 
 def predict_intensity_ensemble(
-    root_dir: str, thresholds: list[float] = [0.33, 0.67]
+    files: list[str], thresholds: list[float] = [0.33, 0.67]
 ) -> tuple[np.ndarray, np.ndarray]:
-    intensity_levels = measure_intensity_level(root_dir, thresholds=thresholds)
+    intensity_levels = measure_intensity_level(files, thresholds=thresholds)
     intensity_hats = convert_annotations_to_probabilities(
         intensity_levels, len(get_intensity_classes())
     )
 
     device = torch.device("cuda")
     clip_intensity_predictions, clip_intensity_hats = predict_intensity_by_clip(
-        root_dir, device
+        files, device
     )
 
     intensity_levels = np.stack([intensity_levels, clip_intensity_predictions], axis=0)

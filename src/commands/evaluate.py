@@ -388,14 +388,14 @@ def evaluate_annotations(
     # download images to temporary folder
     console.log("[blue]Downloading sampled images...")
     storage_images = collect_storage_images(review_tasks)
-    download_object_files(tmp_dir.name, minio_client, storage_images)
+    files = download_object_files(tmp_dir.name, minio_client, storage_images)
 
     status.stop()
 
     # predict labels
     console.log("[blue]Predicting labels...")
-    _, weather_hats = predict_weathers_ensemble(tmp_dir.name, ckpt_path)
-    _, intensity_hats = predict_intensity_ensemble(tmp_dir.name, thresholds=[0.3, 0.67])
+    _, weather_hats = predict_weathers_ensemble(files, ckpt_path)
+    _, intensity_hats = predict_intensity_ensemble(files, thresholds=[0.3, 0.67])
 
     status.start()
     console.log("[blue]Generating metics tables...")
