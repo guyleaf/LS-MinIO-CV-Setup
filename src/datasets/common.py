@@ -15,6 +15,7 @@ class ImageDataset:
             self.images.extend(
                 glob.glob(os.path.join(root_folder, "**", file_pattern), recursive=True)
             )
+        console.print(root_folder)
         console.print(len(self.images))
 
     def __getitem__(self, index: int) -> tuple[Image.Image, str, str]:
