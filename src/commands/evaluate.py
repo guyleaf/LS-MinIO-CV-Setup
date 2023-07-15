@@ -151,7 +151,7 @@ def validate_annotations(
         typer.confirm("Do you want to continue?", default=False, abort=True)
 
 
-def collect_storage_files(samples: list[dict]) -> dict[str, list[str]]:
+def collect_storage_tasks(samples: list[dict]) -> dict[str, list[str]]:
     storage_files = {}
     for sample in samples:
         pattern: list[str] = storage_files.setdefault(
@@ -194,20 +194,20 @@ def review_annotations(
         console.log("[yellow]Creating projects...")
 
         # create project for review
-        storage_files = collect_storage_files(samples)
+        storage_tasks = collect_storage_tasks(samples)
         review_project = create_project(
             project.params["title"], project.params["label_config"], ls_review_client
         )
 
         # import data to review project
-        for bucket, files in storage_files.items():
-            regex_filter = "|".join(files)
+        for bucket, tasks in storage_tasks.items():
+            regex_filter = "|".join(tasks)
             import_data(
                 review_project,
                 [bucket],
                 minio_client,
                 regex_filter=regex_filter,
-                total_tasks=len(files),
+                total_tasks=len(tasks),
             )
     else:
         review_project = ls_review_client.get_project(review_project_id)
@@ -221,10 +221,9 @@ def download_object_files(
     object_files = []
     for bucket, files in storage_files.items():
         for file in files:
-            out_path = os.path.join(out_dir, file.split("/")[-1])
+            out_path = os.path.join(out_dir, file)
             minio_client.fget_object(bucket, file, out_path)
             object_files.append(out_path)
-    console.print(len(tuple(object_files)))
     return object_files
 
 

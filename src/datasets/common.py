@@ -4,8 +4,6 @@ import os
 from PIL import Image
 from torchvision.datasets.folder import IMG_EXTENSIONS
 
-from ..utils import console
-
 
 class ImageDataset:
     def __init__(self, root_folder: str) -> None:
@@ -15,8 +13,6 @@ class ImageDataset:
             self.images.extend(
                 glob.glob(os.path.join(root_folder, "**", file_pattern), recursive=True)
             )
-        console.print(root_folder)
-        console.print(len(self.images))
 
     def __getitem__(self, index: int) -> tuple[Image.Image, str, str]:
         image_path = self.images[index]
